@@ -1,0 +1,98 @@
+# GitLab CI/CD 配置文件
+# 用于在GitLab上自动构建Android APK
+
+stages:
+  - build
+  - test
+  - package
+
+variables:
+  ANDROID_HOME: "/usr/local/android-sdk"
+  JAVA_HOME: "/usr/lib/jvm/java-8-openjdk"
+  GRADLE_HOME: "/usr/local/gradle"
+  PATH: "${GRADLE_HOME}/bin:${ANDROID_HOME}/tools:${ANDROID_HOME}/platform-tools:${PATH}"
+
+# 缓存Gradle依赖
+cache:
+  paths:
+    - .gradle/
+    - build/
+    - app/build/
+
+# 构建阶段
+build:
+  stage: build
+  image: openjdk:8-jdk
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq wget unzip
+    - wget https://services.gradle.org/distributions/gradle-7.5-bin.zip
+    - unzip -d /opt/gradle gradle-7.5-bin.zip
+    - export GRADLE_HOME=/opt/gradle/gradle-7.5
+    - export PATH=$GRADLE_HOME/bin:$PATH
+    - chmod +x ./gradlew
+  script:
+    - echo "开始构建Android应用..."
+    - ./gradlew clean
+    - ./gradlew assembleDebug
+    - ./gradlew assembleRelease
+  artifacts:
+    paths:
+      - app/build/outputs/apk/
+    expire_in: 1 week
+  only:
+    - main
+    - develop
+
+# 测试阶段
+test:
+  stage: test
+  image: openjdk:8-jdk
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq wget unzip
+    - wget https://services.gradle.org/distributions/gradle-7.5-bin.zip
+    - unzip -d /opt/gradle gradle-7.5-bin.zip
+    - export GRADLE_HOME=/opt/gradle/gradle-7.5
+    - export PATH=$GRADLE_HOME/bin:$PATH
+    - chmod +x ./gradlew
+  script:
+    - echo "运行单元测试..."
+    - ./gradlew test
+  artifacts:
+    reports:
+      junit: app/build/test-results/test/TEST-*.xml
+    paths:
+      - app/build/reports/
+    expire_in: 1 week
+  only:
+    - main
+    - develop
+
+# 打包阶段
+package:
+  stage: package
+  image: openjdk:8-jdk
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq wget unzip
+    - wget https://services.gradle.org/distributions/gradle-7.5-bin.zip
+    - unzip -d /opt/gradle gradle-7.5-bin.zip
+    - export GRADLE_HOME=/opt/gradle/gradle-7.5
+    - export PATH=$GRADLE_HOME/bin:$PATH
+    - chmod +x ./gradlew
+  script:
+    - echo "打包APK文件..."
+    - ./gradlew assembleRelease
+    - echo "构建信息:"
+    - echo "构建时间: $(date)"
+    - echo "Git提交: $CI_COMMIT_SHA"
+    - echo "分支: $CI_COMMIT_REF_NAME"
+    - ls -la app/build/outputs/apk/release/
+  artifacts:
+    paths:
+      - app/build/outputs/apk/release/app-release.apk
+      - app/build/outputs/apk/debug/app-debug.apk
+    name: "HelloWorld-${CI_COMMIT_REF_NAME}-${CI_COMMIT_SHORT_SHA}"
+    expire_in: 1 month
+  only:
+    - main
+    - develop
+    - tags 
